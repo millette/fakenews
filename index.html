@@ -1,0 +1,282 @@
+<!doctype html>
+<html>
+  <!--
+  TODO:
+
+  * Multilingue
+  * Multiplayer
+
+  -->
+  <head>
+    <meta charset="utf-8">
+    <title>Game</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+      }
+
+      .obj {
+        font-weight: bold;
+        text-align: center;
+        position: absolute;
+        /* background: white; (now transparent) */
+        border: thin solid black;
+        border-radius: 10px;
+      }
+
+      #main {
+        position: absolute;
+        margin: 30px;
+        border: thin solid blue;
+      }
+
+      #main > p {
+        letter-spacing: 1.1px;
+        font-size: 1.5rem;
+        margin: 3rem;
+        /* padding: 3rem; */
+      }
+
+      #main > ul {
+        font-size: 1.3rem;
+        margin: 3rem;
+      }
+
+      #main > ul > li {
+        padding: 0.25rem 0;
+      }
+
+      #header {
+        text-align: center;
+        display: flex;
+      }
+
+      #header > h1 {
+        margin: 0 1rem;
+        background: pink;
+        flex: auto;
+      }
+
+      #header > p {
+        margin: 0 1rem;
+        background: yellow;
+        flex: auto;
+      }
+
+    </style>
+  </head>
+  <body>
+    <div id="header">
+      <h1>Game!</h1>
+      <p>Level <span id="level">1</span><br>
+      Time <span id="time">0:00</span></p>
+      <p>Score <span id="score">0</span><br>
+      Distance <span id="distance">0</span></p>
+    </div>
+    <div id="main">
+      <p>
+        Manoeuvrez sur le plancher glissant des <b>fausses-nouvelles</b>
+        pour éliminer la plus grosse avec votre fin jugement.
+      </p>
+      <ul>
+        <li>Utilisez les 4 flèches pour accélérer dans ces directions</li>
+        <li>Éliminez une nouvelle en glissant dessus tout en appuyant sur une flèche</li>
+        <li>Utilisez la touche <kbd>m</kbd> pour mettre le son en sourdine</li>
+        <li>Utilisez la touche <kbd>q</kbd> pour terminer le jeu</li>
+        <li>Attention de ne pas attrapez les petites nouvelles et perdre des points</li>
+        <li>Prêt? <button id="start">Go!</button></li>
+      </ul>
+    </div>
+    <script>
+;(() => {
+  'use strict'
+
+  let nItems = 5
+  let goOn = true
+  let score = 0
+  const $distance = document.querySelector('#distance')
+  const $score = document.querySelector('#score')
+  const $time = document.querySelector('#time')
+  const $level = document.querySelector('#level')
+  const gameWidth = window.innerWidth - 80
+  const gameHeight = window.innerHeight - 150
+
+  const makeEl = (r) => {
+    const $el = document.createElement('div')
+    const x = Math.floor(gameWidth / 2)
+    const y = Math.floor(gameHeight / 2)
+    $el.dataset.r = r + 1
+    $el.classList.add('obj')
+    if (!r) { $el.style.background = 'green' }
+    $el.style.top = `${y}px`
+    $el.style.left = `${x}px`
+    $el.innerText = r + 1
+    const w = Math.round(30 + (6 * r))
+    $el.style.width = `${w}px`
+    $el.style.height = `${w}px`
+    $el.style.lineHeight = `${w}px` // vertical center
+    $el.style.boxShadow = `10px 10px 3px ${Math.ceil(r / 3)}px #336`
+    $el.style.zIndex = r
+
+    const sx = (Math.random() < 0.5
+      ? 0.1
+      : -0.1
+      ) * (Math.random() * 2 + 1.5)
+    const sy =  (Math.random() < 0.5
+      ? 0.1
+      : -0.1
+      ) * (Math.random() * 2 + 1.5)
+    return { $el, x, y, sx, sy, w }
+  }
+
+  const els = []
+  const $main = document.querySelector('div#main')
+
+/*
+  $main.style.width = `${gameWidth}px`
+  $main.style.height = `${gameHeight}px`
+*/
+
+  const init = (n, clear) => {
+    $level.innerText = n - 4
+    let obj
+
+    if (clear) {
+      while ((obj = els.pop())) { $main.removeChild(obj.$el) }
+    }
+
+    let r
+    for (r = 0; r < n; ++r) {
+      obj = makeEl(r)
+      els.push(obj)
+      $main.appendChild(obj.$el)
+    }
+  }
+
+  const an = (t) => {
+    const d = new Date(t)
+    $time.innerText = [d.getUTCMinutes(), d.getUTCSeconds()].join(':')
+    const et = t - pt
+    pt = t
+    els.forEach((le) => {
+      le.x +=  le.sx * et
+      le.$el.style.left = `${Math.round(le.x)}px`
+      le.y += le.sy * et
+      le.$el.style.top = `${Math.round(le.y)}px`
+      if (le.x + le.w > gameWidth) {
+        le.sx = -Math.abs(le.sx)
+      } else if (le.x < 0) {
+        le.sx = Math.abs(le.sx)
+      }
+      if (le.y + le.w > gameHeight) {
+        le.sy = -Math.abs(le.sy)
+      } else if (le.y < 0) {
+        le.sy = Math.abs(le.sy)
+      }
+    })
+
+    const x = els[0].x - els[els.length - 1].x
+    const y = els[0].y - els[els.length - 1].y
+    const dist = Math.sqrt(x * x + y * y)
+    osc.frequency.value = 50000 / (dist + 25)
+    $distance.innerText = Math.round(dist / 10)
+    if (goOn) { return requestAnimationFrame(an) }
+    osc.stop()
+  }
+
+  const whatHere = ($el) => {
+    const { left, top } = $el.getBoundingClientRect()
+    return document.elementFromPoint(left, top)
+  }
+
+  const kbHandler = (event) => {
+    let k
+    switch (event.key) {
+      case 'm':
+        osc.stop()
+        break
+
+      case 'q':
+        goOn = false
+        break
+
+      case 'ArrowUp':
+        k = 'up'
+        els[0].sy = els[0].sy - 0.15
+        break
+
+      case 'ArrowDown':
+        els[0].sy = els[0].sy + 0.15
+        k = 'down'
+        break
+
+      case 'ArrowLeft':
+        els[0].sx = els[0].sx - 0.15
+        k = 'left'
+        break
+
+      case 'ArrowRight':
+        els[0].sx = els[0].sx + 0.15
+        k = 'right'
+        break
+
+      default: return
+    }
+    if (!k) { return }
+    const spaced = whatHere(els[0].$el)
+
+    if (spaced.dataset.r) {
+      const rn = parseInt(spaced.dataset.r)
+      if (rn === nItems) {
+        score = score + rn + 10
+        init(++nItems, true)
+      } else {
+        spaced.style.background = 'red'
+        score = score - rn
+      }
+      $score.innerText = score
+    }
+  }
+
+  const $start = document.querySelector('#start')
+  $start.focus()
+
+  let pt
+
+  const setupSound = (gain) => {
+    const audioContext = new window.AudioContext()
+    const masterGainNode = audioContext.createGain()
+    masterGainNode.connect(audioContext.destination)
+    masterGainNode.gain.value = gain
+    const sineTerms = new Float32Array([0, 0, 1, 0, 1])
+    const cosineTerms = new Float32Array(sineTerms.length)
+    const customWaveform = audioContext.createPeriodicWave(cosineTerms, sineTerms)
+    const osc = audioContext.createOscillator()
+    osc.connect(masterGainNode)
+    osc.setPeriodicWave(customWaveform)
+    osc.frequency.value = 55 / 4
+    return osc
+  }
+
+  const osc = setupSound(0.07)
+
+  const startGame = () => {
+    $main.innerText = ''
+    $start.blur()
+    $start.disabled = true
+    init(nItems)
+    pt = performance.now()
+    osc.start()
+    requestAnimationFrame(an)
+    document.addEventListener('keydown', kbHandler, false)
+  }
+
+  $main.style.width = `${gameWidth}px`
+  $main.style.height = `${gameHeight}px`
+
+  $start.addEventListener('click', startGame, false)
+})()
+    </script>
+  </body>
+</html>
